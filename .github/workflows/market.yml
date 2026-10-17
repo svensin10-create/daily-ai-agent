@@ -1,0 +1,32 @@
+name: Market Watcher
+
+on:
+  schedule:
+    - cron: "30 11 * * 1-5"   # weekdays 11:30 UTC (7:30 AM Eastern in daylight time)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  market:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Run market agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+        run: python market_agent.py
+      - name: Save report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add market
+          git diff --staged --quiet || git commit -m "Market report $(date -u +%F)"
+          git pull --rebase
+          git push
