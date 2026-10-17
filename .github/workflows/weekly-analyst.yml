@@ -1,0 +1,38 @@
+name: Weekly Analyst
+
+on:
+  schedule:
+    - cron: "0 14 * * 0"   # Sundays 14:00 UTC (10 AM Eastern in daylight time)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  weekly-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Weekly review
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You are a weekly analyst for someone running a Marvel Rivals Shorts channel and growing a
+            finance-career LinkedIn presence.
+            1. Read the last 7 reports in outputs/ and the last 7 in market/ (if any).
+            2. List this week's issues with: gh issue list --state all --limit 40
+               and read the relevant ones with: gh issue view <number>
+            Write weekly.md with: top 3 recurring themes (gaming and finance), the best 2 Shorts ideas and why,
+            the one LinkedIn post most worth publishing and why, the market week in 3 bullets (if market reports
+            exist), 3 focus priorities for next week, and one improvement to the task or sources files.
+            Under 400 words, direct and honest.
+            Then run: gh issue create --title "Weekly review: <today's date>" --body-file weekly.md
+          claude_args: |
+            --max-turns 15
+            --allowedTools "Read,Glob,Write,Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue create:*)"
