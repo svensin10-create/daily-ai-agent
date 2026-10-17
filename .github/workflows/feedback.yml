@@ -1,0 +1,43 @@
+name: Claude Feedback
+
+on:
+  workflow_run:
+    workflows: ["Daily AI Agent"]   # runs right after the daily agent finishes
+    types: [completed]
+  workflow_dispatch:                # lets you run it manually from the Actions tab
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  feedback:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Claude reviews the latest report
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            Find the newest report in the outputs/ folder (files are named YYYY-MM-DD.md) and read it.
+            The repo owner makes short-form gaming videos and posts on LinkedIn about finance careers.
+
+            Write honest, direct feedback to a file named feedback.md with these sections:
+            1. Short idea score: rate the suggested YouTube Short/TikTok idea from 1-10 and say why in one or two sentences.
+            2. Better hooks: give 3 punchier opening lines or titles for that Short.
+            3. LinkedIn pick: name the one story most worth a LinkedIn post and give a 2-3 sentence angle he could use.
+            4. Brief quality: one sentence on anything weak or missing in the report, and one tweak for task.txt.
+            Keep it under 250 words. No fluff.
+
+            Then create a GitHub issue with this exact command, using the report's date in the title:
+            gh issue create --title "Claude feedback: <date>" --body-file feedback.md
+          claude_args: |
+            --max-turns 10
+            --allowedTools "Read,Glob,Write,Bash(gh issue create:*)"
