@@ -1,0 +1,66 @@
+name: Send to Typefully
+
+on:
+  workflow_run:
+    workflows: ["Content Team"]   # runs after the LinkedIn drafter finishes
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  typefully:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get the newest LinkedIn draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh issue list --search "LinkedIn draft in:title" --state all --limit 1 --json title,body > draft.json
+
+      - name: Save it as a Typefully draft (never publishes)
+        env:
+          TYPEFULLY_API_KEY: ${{ secrets.TYPEFULLY_API_KEY }}
+          SOCIAL_SET_ID: "341991"
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys, urllib.request, urllib.error
+
+          issues = json.load(open("draft.json", encoding="utf-8"))
+          if not issues:
+              sys.exit("No LinkedIn draft issue found.")
+          body = issues[0]["body"].strip()
+
+          # Keep only the post itself: cut everything from the "Source:" line down
+          lines = body.splitlines()
+          for i, line in enumerate(lines):
+              if line.strip().lower().startswith("source:"):
+                  lines = lines[:i]
+                  break
+          while lines and lines[-1].strip() in ("", "---", "***", "___"):
+              lines.pop()
+          post = "\n".join(lines).strip()
+          if not post:
+              sys.exit("Draft was empty after cleanup.")
+
+          payload = {"platforms": {"linkedin": {"enabled": True, "posts": [{"text": post}]}}}
+          req = urllib.request.Request(
+              f"https://api.typefully.com/v2/social-sets/{os.environ['SOCIAL_SET_ID']}/drafts",
+              data=json.dumps(payload).encode("utf-8"),
+              headers={
+                  "Authorization": f"Bearer {os.environ['TYPEFULLY_API_KEY']}",
+                  "Content-Type": "application/json",
+              },
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  result = json.load(resp)
+          except urllib.error.HTTPError as err:
+              sys.exit(f"Typefully error {err.code}: {err.read().decode()[:500]}")
+          print(f"Draft saved to Typefully (id {result.get('id')}). Review it before scheduling.")
+          print(result.get("private_url", ""))
+          EOF
