@@ -1,0 +1,36 @@
+name: Daily AI Agent
+
+on:
+  schedule:
+    - cron: "0 12 * * *"   # every day at 12:00 UTC (8 AM Eastern during daylight time)
+  workflow_dispatch:        # lets you run it manually from the Actions tab
+
+permissions:
+  contents: write           # needed to save reports back into the repo
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run agent
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+        run: python agent.py
+
+      - name: Save report to repo
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add outputs
+          git diff --staged --quiet || git commit -m "Agent report $(date -u +%F)"
+          git push
