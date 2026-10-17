@@ -1,0 +1,4 @@
+# One RSS feed per line. Change q= in Google News links for any topic.
+https://news.google.com/rss/search?q=stock+market+today&hl=en-US&gl=US&ceid=US:en
+https://news.google.com/rss/search?q=Federal+Reserve+interest+rates&hl=en-US&gl=US&ceid=US:en
+https://news.google.com/rss/search?q=wealth+management+financial+advisors&hl=en-US&gl=US&ceid=US:en
