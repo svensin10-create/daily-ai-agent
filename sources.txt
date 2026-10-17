@@ -1,0 +1,4 @@
+# One RSS/Atom feed URL per line. Lines starting with # are ignored.
+# Google News search feeds work for almost any topic: change the q= part.
+https://news.google.com/rss/search?q=Marvel+Rivals&hl=en-US&gl=US&ceid=US:en
+https://news.google.com/rss/search?q=financial+advisor+industry&hl=en-US&gl=US&ceid=US:en
