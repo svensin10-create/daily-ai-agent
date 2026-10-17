@@ -1,0 +1,68 @@
+name: Content Team
+
+on:
+  workflow_run:
+    workflows: ["Claude Feedback"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  script-writer:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write a Shorts script
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You are a YouTube Shorts / TikTok script writer for a Marvel Rivals gaming channel called "sven".
+            1. Read the newest report in outputs/ (files named YYYY-MM-DD.md).
+            2. Find the newest feedback issue with: gh issue list --search "Claude feedback in:title" --state all --limit 1
+               then read it with: gh issue view <number>
+            3. Pick the strongest GAMING angle (use the feedback's best hook if it is good).
+            Write a 30-second vertical video script to script.md with: a title under 60 characters, a hook for the
+            first 2 seconds (spoken line + on-screen text), beat-by-beat script with rough timestamps, gameplay
+            footage to capture for each beat, an ending line that drives comments, and 3 hashtags.
+            Punchy and natural, under 300 words.
+            Then run: gh issue create --title "Shorts script: <report date>" --body-file script.md
+          claude_args: |
+            --max-turns 12
+            --allowedTools "Read,Glob,Write,Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue create:*)"
+
+  linkedin-drafter:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Draft a LinkedIn post
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: |
+            You draft LinkedIn posts for a college finance major (wealth management) who wants to become a
+            financial advisor and is growing his LinkedIn.
+            1. Read the newest report in outputs/ and, if it exists, the newest report in market/.
+            2. Find the newest feedback issue with: gh issue list --search "Claude feedback in:title" --state all --limit 1
+               then read it with: gh issue view <number>
+            3. Use the feedback's LinkedIn pick, or the best finance story if there isn't one.
+            Write linkedin.md with ONE ready-to-post LinkedIn post: a strong first line, 120-200 words in short
+            paragraphs, a genuine student perspective, no buzzwords, ending with a question, plus 3 hashtags.
+            Under a divider add "Source:" with the article link.
+            Never invent facts, numbers, or personal experiences.
+            Then run: gh issue create --title "LinkedIn draft: <report date>" --body-file linkedin.md
+          claude_args: |
+            --max-turns 12
+            --allowedTools "Read,Glob,Write,Bash(gh issue list:*),Bash(gh issue view:*),Bash(gh issue create:*)"
