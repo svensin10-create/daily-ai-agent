@@ -8,12 +8,16 @@ import datetime
 import os
 import pathlib
 import sys
+import time
 import xml.etree.ElementTree as ET
 
 import requests
 
 API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL = os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash"
+FALLBACK_MODEL = os.environ.get("GEMINI_FALLBACK_MODEL") or "gemini-2.5-flash-lite"
+RETRY_STATUSES = {429, 500, 502, 503, 504}  # busy or temporary server errors
+ATTEMPTS_PER_MODEL = 3
 ROOT = pathlib.Path(__file__).parent
 ATOM = "{http://www.w3.org/2005/Atom}"
 
@@ -52,21 +56,40 @@ def fetch_headlines(url, limit=10):
 
 
 def ask_model(prompt):
-    """Send a prompt to Gemini and return the text reply."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent"
-    resp = requests.post(
-        url,
-        headers={"x-goog-api-key": API_KEY, "Content-Type": "application/json"},
-        json={"contents": [{"parts": [{"text": prompt}]}]},
-        timeout=120,
-    )
-    if resp.status_code != 200:
-        sys.exit(f"Model request failed ({resp.status_code}): {resp.text[:500]}")
-    data = resp.json()
-    try:
-        return data["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError):
-        sys.exit(f"Unexpected model response: {str(data)[:500]}")
+    """Send a prompt to Gemini and return the text reply.
+
+    Gemini is often overloaded (503) or slow, so retry with a growing wait,
+    then fall back to a lighter model before giving up.
+    """
+    last_error = "no attempts made"
+    for model in dict.fromkeys([MODEL, FALLBACK_MODEL]):  # skip duplicates, keep order
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        for attempt in range(1, ATTEMPTS_PER_MODEL + 1):
+            try:
+                resp = requests.post(
+                    url,
+                    headers={"x-goog-api-key": API_KEY, "Content-Type": "application/json"},
+                    json={"contents": [{"parts": [{"text": prompt}]}]},
+                    timeout=120,
+                )
+            except requests.exceptions.RequestException as err:  # timeouts, dropped connections
+                last_error = f"{model}: {err}"
+            else:
+                if resp.status_code == 200:
+                    data = resp.json()
+                    try:
+                        return data["candidates"][0]["content"]["parts"][0]["text"]
+                    except (KeyError, IndexError):
+                        sys.exit(f"Unexpected model response: {str(data)[:500]}")
+                last_error = f"{model} ({resp.status_code}): {resp.text[:500]}"
+                if resp.status_code not in RETRY_STATUSES:
+                    break  # retrying won't help; try the next model
+            if attempt < ATTEMPTS_PER_MODEL:
+                wait = 15 * 2 ** (attempt - 1)
+                print(f"Attempt {attempt} with {model} failed, retrying in {wait}s: {last_error[:200]}")
+                time.sleep(wait)
+        print(f"Giving up on {model}: {last_error[:200]}")
+    sys.exit(f"Model request failed: {last_error}")
 
 
 def main():
